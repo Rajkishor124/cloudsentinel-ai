@@ -1,0 +1,46 @@
+name: Agent CI
+
+on:
+  push:
+    branches: [main, master]
+    paths:
+      - "agent/**"
+      - ".github/workflows/agent-ci.yml"
+  pull_request:
+    branches: [main, master]
+    paths:
+      - "agent/**"
+      - ".github/workflows/agent-ci.yml"
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+
+    defaults:
+      run:
+        working-directory: ./agent
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Python 3.11
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: "pip"
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -e .
+
+      - name: Lint with flake8
+        run: |
+          pip install flake8
+          flake8 src/ --count --select=E9,F63,F7,F82 --show-source --statistics
+
+      - name: Validate imports
+        run: |
+          python -c "import sys; sys.path.insert(0, 'src'); from agents.dqn_agent import DQNAgent; print('DQN Agent import OK')"
+          python -c "import sys; sys.path.insert(0, 'src'); from environment.cloud_env import CloudEnvironment; print('CloudEnvironment import OK')"
