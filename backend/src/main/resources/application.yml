@@ -1,0 +1,18 @@
+server:
+  port: 8080
+
+spring:
+  application:
+    name: cloud-sentinel-backend
+  profiles:
+    active: dev
+  jackson:
+    serialization:
+      write-dates-as-timestamps: false
+    default-property-inclusion: non_null
+
+# Logging
+logging:
+  level:
+    com.cloudsentinel: DEBUG
+    org.springframework.security: DEBUG

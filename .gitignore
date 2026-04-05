@@ -1,0 +1,35 @@
+# Dependencies
+node_modules/
+.venv/
+__pycache__/
+*.pyc
+target/
+*.class
+
+# IDE
+.idea/
+.vscode/
+*.iml
+.project
+.classpath
+.settings/
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Build
+dist/
+build/
+*.log
+
+# Environment
+.env
+.env.local
+
+# Checkpoints (keep directory, ignore contents)
+agent/checkpoints/*
+!agent/checkpoints/.gitkeep
+
+# Docker
+mysql-data/

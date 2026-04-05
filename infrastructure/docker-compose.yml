@@ -1,0 +1,134 @@
+version: "3.9"
+
+services:
+  spring-backend:
+    build:
+      context: ../backend
+      dockerfile: Dockerfile
+    container_name: cloudsentinel-backend
+    ports:
+      - "8080:8080"
+    environment:
+      - SPRING_PROFILES_ACTIVE=docker
+      - SPRING_DATASOURCE_URL=jdbc:mysql://mysql:3306/incident_db?createDatabaseIfNotExist=true&useSSL=false&allowPublicKeyRetrieval=true
+      - SPRING_DATASOURCE_USERNAME=root
+      - SPRING_DATASOURCE_PASSWORD=${MYSQL_ROOT_PASSWORD:-secret}
+      - SPRING_REDIS_HOST=redis
+      - SPRING_REDIS_PORT=6379
+      - KAFKA_BOOTSTRAP_SERVERS=kafka:9092
+      - JWT_SECRET=${JWT_SECRET:-dev-secret-key-must-be-at-least-256-bits-long}
+    depends_on:
+      mysql:
+        condition: service_healthy
+      redis:
+        condition: service_started
+    deploy:
+      resources:
+        limits:
+          cpus: "2"
+          memory: 1g
+    networks:
+      - cloudsentinel-network
+    restart: unless-stopped
+
+  python-agent:
+    build:
+      context: ../agent
+      dockerfile: Dockerfile
+    container_name: cloudsentinel-agent
+    environment:
+      - SIMULATOR_API_URL=http://spring-backend:8080
+      - CUDA_VISIBLE_DEVICES=""
+      - TOTAL_TIMESTEPS=${TOTAL_TIMESTEPS:-1000000}
+    volumes:
+      - model-store:/app/checkpoints
+    depends_on:
+      - spring-backend
+    deploy:
+      resources:
+        limits:
+          cpus: "2"
+          memory: 2g
+    networks:
+      - cloudsentinel-network
+    restart: "no"
+
+  react-frontend:
+    build:
+      context: ../frontend
+      dockerfile: Dockerfile
+    container_name: cloudsentinel-frontend
+    ports:
+      - "3000:80"
+    depends_on:
+      - spring-backend
+    networks:
+      - cloudsentinel-network
+    restart: unless-stopped
+
+  mysql:
+    image: mysql:8.0
+    container_name: cloudsentinel-mysql
+    environment:
+      - MYSQL_ROOT_PASSWORD=${MYSQL_ROOT_PASSWORD:-secret}
+      - MYSQL_DATABASE=incident_db
+    volumes:
+      - mysql-data:/var/lib/mysql
+    ports:
+      - "3306:3306"
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - cloudsentinel-network
+    restart: unless-stopped
+
+  redis:
+    image: redis:7-alpine
+    container_name: cloudsentinel-redis
+    command: redis-server --maxmemory 256mb --maxmemory-policy allkeys-lru
+    ports:
+      - "6379:6379"
+    networks:
+      - cloudsentinel-network
+    restart: unless-stopped
+
+  kafka:
+    image: confluentinc/cp-kafka:7.5.0
+    container_name: cloudsentinel-kafka
+    environment:
+      KAFKA_BROKER_ID: 1
+      KAFKA_ZOOKEEPER_CONNECT: zookeeper:2181
+      KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: PLAINTEXT:PLAINTEXT,PLAINTEXT_HOST:PLAINTEXT
+      KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://kafka:9092,PLAINTEXT_HOST://localhost:29092
+      KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
+      KAFKA_AUTO_CREATE_TOPICS_ENABLE: "true"
+    depends_on:
+      - zookeeper
+    ports:
+      - "29092:29092"
+    networks:
+      - cloudsentinel-network
+    restart: unless-stopped
+
+  zookeeper:
+    image: confluentinc/cp-zookeeper:7.5.0
+    container_name: cloudsentinel-zookeeper
+    environment:
+      ZOOKEEPER_CLIENT_PORT: 2181
+      ZOOKEEPER_TICK_TIME: 2000
+    ports:
+      - "2181:2181"
+    networks:
+      - cloudsentinel-network
+    restart: unless-stopped
+
+volumes:
+  mysql-data:
+  model-store:
+
+networks:
+  cloudsentinel-network:
+    driver: bridge

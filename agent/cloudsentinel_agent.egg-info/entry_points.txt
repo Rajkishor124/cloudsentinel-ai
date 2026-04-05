@@ -1,0 +1,4 @@
+[console_scripts]
+eval-agent = scripts.evaluate:main
+qlearn-baseline = scripts.q_learning_baseline:run_q_learning
+train-agent = scripts.train:main

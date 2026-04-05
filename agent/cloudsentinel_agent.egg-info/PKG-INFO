@@ -1,0 +1,16 @@
+Metadata-Version: 2.4
+Name: cloudsentinel-agent
+Version: 0.1.0
+Summary: CloudSentinel AI - RL Training Agent
+Requires-Python: >=3.11
+Requires-Dist: gymnasium>=1.0.0
+Requires-Dist: stable-baselines3>=2.4.0
+Requires-Dist: torch>=2.9.0
+Requires-Dist: numpy>=2.0.0
+Requires-Dist: requests>=2.31.0
+Requires-Dist: pyyaml>=6.0.1
+Requires-Dist: tensorboard>=2.18.0
+Requires-Dist: shap>=0.45.0
+Requires-Dist: scikit-learn>=1.5.0
+Requires-Dist: pandas>=2.2.0
+Requires-Dist: matplotlib>=3.9.0

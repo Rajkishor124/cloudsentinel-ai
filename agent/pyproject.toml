@@ -1,0 +1,31 @@
+[build-system]
+requires = ["setuptools>=68.0", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "cloudsentinel-agent"
+version = "0.1.0"
+description = "CloudSentinel AI - RL Training Agent"
+requires-python = ">=3.11"
+dependencies = [
+    "gymnasium>=1.0.0",
+    "stable-baselines3>=2.4.0",
+    "torch>=2.9.0",
+    "numpy>=2.0.0",
+    "requests>=2.31.0",
+    "pyyaml>=6.0.1",
+    "tensorboard>=2.18.0",
+    "shap>=0.45.0",
+    "scikit-learn>=1.5.0",
+    "pandas>=2.2.0",
+    "matplotlib>=3.9.0",
+]
+
+[project.scripts]
+train-agent = "scripts.train:main"
+eval-agent = "scripts.evaluate:main"
+qlearn-baseline = "scripts.q_learning_baseline:run_q_learning"
+self-healing = "scripts.self_healing:main"
+
+[tool.setuptools.packages.find]
+include = ["src*", "scripts*"]
