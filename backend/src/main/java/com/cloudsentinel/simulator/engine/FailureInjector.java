@@ -61,13 +61,14 @@ public class FailureInjector {
 
         if (healthyNodes.size() < 2) return injectSimpleFailure(state);
 
-        // Pick 2-3 random failures
+        // Pick 2-3 random failures (create mutable copy for shuffle)
         int numFailures = Math.min(2 + RANDOM.nextInt(2), healthyNodes.size());
-        Collections.shuffle(healthyNodes);
+        List<ServiceNode> mutableNodes = new ArrayList<>(healthyNodes);
+        Collections.shuffle(mutableNodes);
 
         FailureMode primaryFailure = null;
         for (int i = 0; i < numFailures; i++) {
-            ServiceNode node = healthyNodes.get(i);
+            ServiceNode node = mutableNodes.get(i);
             FailureMode failure = randomMediumFailure();
             node.setActiveFailure(failure);
             node.setFailureTick(0);

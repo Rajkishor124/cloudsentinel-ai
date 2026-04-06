@@ -14,18 +14,11 @@ function App() {
   return (
     <Routes>
       <Route path="/login" element={<LoginPage />} />
-      <Route
-        path="/dashboard"
-        element={
-          <Layout>
-            <DashboardPage />
-          </Layout>
-        }
-      />
+      <Route path="/" element={<DashboardPage />} />
       <Route
         path="/healing"
         element={
-          <Layout>
+          <Layout title="Self-Healing" subtitle="Autonomous failure detection & recovery">
             <HealingPage />
           </Layout>
         }
@@ -33,7 +26,7 @@ function App() {
       <Route
         path="/training"
         element={
-          <Layout>
+          <Layout title="Training" subtitle="RL agent training & evaluation">
             <TrainingPage />
           </Layout>
         }
@@ -41,12 +34,12 @@ function App() {
       <Route
         path="/topology"
         element={
-          <Layout>
+          <Layout title="Topology" subtitle="Service dependency graph">
             <TopologyPage />
           </Layout>
         }
       />
-      <Route path="/" element={<Navigate to="/dashboard" replace />} />
+      <Route path="/dashboard" element={<Navigate to="/" replace />} />
     </Routes>
   );
 }

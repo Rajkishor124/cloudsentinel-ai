@@ -3,6 +3,7 @@
  */
 
 import { ReactNode } from 'react';
+import { SectionCard } from './primitives';
 
 interface CardProps {
   children: ReactNode;
@@ -20,17 +21,11 @@ export default function Card({
   action,
 }: CardProps) {
   return (
-    <div className={`bg-sentinel-card border border-sentinel-border rounded-lg p-5 ${className}`}>
-      {(title || subtitle || action) && (
-        <div className="flex items-start justify-between mb-4">
-          <div>
-            {title && <h3 className="text-lg font-semibold text-sentinel-text">{title}</h3>}
-            {subtitle && <p className="text-sm text-sentinel-muted mt-1">{subtitle}</p>}
-          </div>
-          {action && <div>{action}</div>}
-        </div>
+    <SectionCard title={title} headerRight={action} className={className}>
+      {subtitle && (
+        <p className="text-xs text-on-surface-variant -mt-2 mb-4">{subtitle}</p>
       )}
       {children}
-    </div>
+    </SectionCard>
   );
 }

@@ -2,17 +2,30 @@
  * StatBox component for displaying key metrics.
  */
 
-import { ReactNode } from 'react';
+import { MetricCard } from './primitives';
 
 interface StatBoxProps {
   label: string;
   value: string | number;
-  icon?: ReactNode;
+  icon?: string;
   trend?: 'up' | 'down' | 'stable';
   trendValue?: string;
   color?: 'green' | 'red' | 'yellow' | 'blue';
   className?: string;
 }
+
+const COLOR_MAP: Record<string, 'primary' | 'secondary' | 'tertiary' | 'error'> = {
+  green: 'primary',
+  red: 'error',
+  yellow: 'tertiary',
+  blue: 'secondary',
+};
+
+const TREND_ICONS: Record<string, string> = {
+  up: 'trending_up',
+  down: 'trending_down',
+  stable: 'trending_flat',
+};
 
 export default function StatBox({
   label,
@@ -23,41 +36,17 @@ export default function StatBox({
   color = 'blue',
   className = '',
 }: StatBoxProps) {
-  const colorClasses = {
-    green: 'text-sentinel-green',
-    red: 'text-sentinel-red',
-    yellow: 'text-sentinel-yellow',
-    blue: 'text-sentinel-blue',
-  };
-
-  const trendIcons = {
-    up: '↑',
-    down: '↓',
-    stable: '→',
-  };
-
-  const trendColors = {
-    up: 'text-sentinel-green',
-    down: 'text-sentinel-red',
-    stable: 'text-sentinel-muted',
-  };
+  const accent = COLOR_MAP[color];
 
   return (
-    <div className={`bg-sentinel-card border border-sentinel-border rounded-lg p-4 ${className}`}>
-      <div className="flex items-start justify-between">
-        <div className="flex-1">
-          <p className="text-sm text-sentinel-muted">{label}</p>
-          <p className={`text-2xl font-bold mt-1 ${colorClasses[color]}`}>{value}</p>
-          {trend && trendValue && (
-            <div className="flex items-center gap-1 mt-2">
-              <span className={`text-sm ${trendColors[trend]}`}>
-                {trendIcons[trend]} {trendValue}
-              </span>
-            </div>
-          )}
-        </div>
-        {icon && <div className="text-sentinel-muted">{icon}</div>}
-      </div>
-    </div>
+    <MetricCard
+      label={label}
+      value={value}
+      accent={accent}
+      icon={icon}
+      sub={trendValue}
+      subIcon={trend ? TREND_ICONS[trend] : undefined}
+      className={className}
+    />
   );
 }

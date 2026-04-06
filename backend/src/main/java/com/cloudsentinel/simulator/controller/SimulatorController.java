@@ -120,6 +120,7 @@ public class SimulatorController {
 
     /**
      * Manual failure injection for testing.
+     * If no healthy nodes are available, recovers the least-affected node first.
      * POST /api/v1/simulation/inject-failure?mode=CPU_SPIKE
      */
     @PostMapping("/inject-failure")
@@ -139,22 +140,101 @@ public class SimulatorController {
                     .filter(n -> n.getActiveFailure() == com.cloudsentinel.simulator.model.FailureMode.HEALTHY)
                     .findFirst();
 
-            if (target.isPresent()) {
-                ServiceNode node = target.get();
-                node.setActiveFailure(failureMode);
-                node.setFailureTick(0);
+            // If no healthy nodes, recover the least-affected node first
+            if (target.isEmpty()) {
+                Optional<ServiceNode> leastAffected = state.getTopology().getAllNodes().stream()
+                        .filter(n -> !n.getActiveFailure().name().contains("CRASH"))
+                        .filter(n -> !n.getActiveFailure().name().contains("DEADLOCK"))
+                        .min(Comparator.comparingDouble(ServiceNode::getErrorRate));
 
-                Map<String, Object> response = new LinkedHashMap<>();
-                response.put("injected", true);
-                response.put("mode", failureMode.name());
-                response.put("target", node.getServiceId());
+                if (leastAffected.isPresent()) {
+                    ServiceNode node = leastAffected.get();
+                    // Recover the node first
+                    node.setActiveFailure(com.cloudsentinel.simulator.model.FailureMode.HEALTHY);
+                    node.setFailureTick(0);
+                    node.setCpu(0.2);
+                    node.setMemory(0.3);
+                    node.setErrorRate(0.0);
+                    node.setLatency(0.1);
+                    node.setRestartCooldown(0);
 
-                return ResponseEntity.ok(response);
+                    log.info("Recovered {} from {} to inject new failure", 
+                            node.getServiceName(), node.getActiveFailure());
+
+                    // Now inject the requested failure
+                    node.setActiveFailure(failureMode);
+                    node.setFailureTick(0);
+                    applyFailureSignatureToNode(node, failureMode);
+
+                    Map<String, Object> response = new LinkedHashMap<>();
+                    response.put("injected", true);
+                    response.put("mode", failureMode.name());
+                    response.put("target", node.getServiceId());
+                    response.put("recoveredFirst", true);
+
+                    return ResponseEntity.ok(response);
+                }
+
+                return ResponseEntity.badRequest().body(Map.of("error", "No healthy nodes available and none could be recovered"));
             }
 
-            return ResponseEntity.badRequest().body(Map.of("error", "No healthy nodes available"));
+            ServiceNode node = target.get();
+            node.setActiveFailure(failureMode);
+            node.setFailureTick(0);
+
+            Map<String, Object> response = new LinkedHashMap<>();
+            response.put("injected", true);
+            response.put("mode", failureMode.name());
+            response.put("target", node.getServiceId());
+
+            return ResponseEntity.ok(response);
         } catch (IllegalArgumentException e) {
             return ResponseEntity.badRequest().body(Map.of("error", "Invalid failure mode: " + mode));
+        }
+    }
+
+    /**
+     * Apply failure signature metrics to a node.
+     */
+    private void applyFailureSignatureToNode(ServiceNode node, com.cloudsentinel.simulator.model.FailureMode failure) {
+        switch (failure) {
+            case CPU_SPIKE -> {
+                node.setCpu(0.5);
+                node.setMemory(0.35);
+                node.setErrorRate(0.02);
+                node.setLatency(0.2);
+            }
+            case MEMORY_LEAK -> {
+                node.setCpu(0.3);
+                node.setMemory(0.55);
+                node.setErrorRate(0.01);
+                node.setLatency(0.15);
+            }
+            case SERVICE_CRASH -> {
+                node.setCpu(0.1);
+                node.setMemory(0.2);
+                node.setErrorRate(0.5);
+                node.setLatency(0.8);
+            }
+            case NETWORK_PARTITION -> {
+                node.setCpu(0.3);
+                node.setMemory(0.35);
+                node.setErrorRate(0.3);
+                node.setLatency(0.6);
+            }
+            case DATABASE_DEADLOCK -> {
+                node.setCpu(0.6);
+                node.setMemory(0.5);
+                node.setErrorRate(0.15);
+                node.setLatency(0.5);
+            }
+            case CASCADING_FAILURE -> {
+                node.setCpu(0.4);
+                node.setMemory(0.45);
+                node.setErrorRate(0.25);
+                node.setLatency(0.4);
+            }
+            default -> {}
         }
     }
 

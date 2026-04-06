@@ -1,67 +1,49 @@
-/**
- * Main Dashboard page with real-time metrics and charts.
- */
-
 import { useEffect, useState } from 'react';
-import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, BarChart, Bar, Legend } from 'recharts';
-import { useSimulationStore } from '@stores/simulationStore';
-import { useHealingStore } from '@stores/healingStore';
-import Card from '@components/ui/Card';
-import StatBox from '@components/ui/StatBox';
-import Badge from '@components/ui/Badge';
-import Button from '@components/ui/Button';
-import LoadingSpinner from '@components/ui/LoadingSpinner';
-import type { DifficultyLevel } from '@types/api';
+import {
+  LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip,
+  ResponsiveContainer, BarChart, Bar, Legend,
+} from 'recharts';
+import { useSimulationStore } from '../stores/simulationStore';
+import { useHealingStore }    from '../stores/healingStore';
+import Layout from '../components/layout/Layout';
+import {
+  MetricCard, SectionCard, StatusBadge, PrimaryButton, GhostButton, EmptyState, Spinner,
+} from '../components/ui/primitives';
+import type { DifficultyLevel, AnomalyAlert } from '../types/api';
+
+// ─── Custom tooltip shared style ─────────────────────────────────────────────
+const TOOLTIP_STYLE = {
+  backgroundColor: '#1c2026',
+  border: '1px solid rgba(66,71,84,0.3)',
+  borderRadius: '12px',
+  fontSize: '12px',
+  color: '#dfe2eb',
+};
 
 export default function DashboardPage() {
   const {
-    topology,
-    isLoading: isLoadingSim,
-    difficulty,
-    resetSimulation,
-    fetchTopology,
-    getSystemHealth,
-    getActiveFailures,
-    isHealthy,
+    topology, isLoading, difficulty,
+    resetSimulation, fetchTopology,
+    getSystemHealth, getActiveFailures, isHealthy,
   } = useSimulationStore();
 
-  const {
-    status,
-    alerts,
-    recentCycles,
-    fetchStatus,
-    fetchAlerts,
-    fetchRecentCycles,
-  } = useHealingStore();
+  const { status, alerts, recentCycles, fetchStatus, fetchAlerts } = useHealingStore();
 
-  const [healthHistory, setHealthHistory] = useState<Array<{ time: string; health: number }>>([]);
+  const [healthHistory, setHealthHistory] = useState<{ time: string; health: number }[]>([]);
   const [isRefreshing, setIsRefreshing] = useState(false);
 
-  // Initial load
+  useEffect(() => { resetSimulation(difficulty); }, []);
+
   useEffect(() => {
-    resetSimulation(difficulty);
+    const id = setInterval(refreshData, 5000);
+    return () => clearInterval(id);
   }, []);
 
-  // Poll for updates
-  useEffect(() => {
-    const interval = setInterval(() => {
-      refreshData();
-    }, 5000);
-
-    return () => clearInterval(interval);
-  }, []);
-
-  // Track health history
   useEffect(() => {
     if (topology) {
-      const health = getSystemHealth();
-      setHealthHistory((prev) => {
-        const newHistory = [
-          ...prev,
-          { time: new Date().toLocaleTimeString(), health },
-        ];
-        return newHistory.slice(-20); // Keep last 20 points
-      });
+      setHealthHistory(prev =>
+        [...prev, { time: new Date().toLocaleTimeString(), health: getSystemHealth() }].slice(-20)
+      );
     }
   }, [topology]);
 
@@ -71,212 +53,298 @@ export default function DashboardPage() {
     setIsRefreshing(false);
   };
 
-  const handleDifficultyChange = async (newDifficulty: DifficultyLevel) => {
-    await resetSimulation(newDifficulty);
-  };
-
-  const systemHealth = getSystemHealth();
+  const systemHealth  = getSystemHealth();
   const activeFailures = getActiveFailures();
-  const healthy = isHealthy();
-  const criticalAlerts = alerts.filter((a) => a.severity === 'CRITICAL' || a.severity === 'HIGH');
+  const criticalAlerts = alerts.filter(a => a.severity === 'CRITICAL' || a.severity === 'HIGH');
+  const sloScore = topology
+    ? (topology.nodes.filter(n => n.failureMode === 'HEALTHY').length / Math.max(topology.nodes.length, 1)) * 100
+    : 0;
+
+  const serviceMetrics = topology?.nodes.map(n => ({
+    name: n.name.split('-')[0],
+    CPU:       +(n.cpu * 100).toFixed(1),
+    Memory:    +(n.memory * 100).toFixed(1),
+    'Err Rate': +(n.errorRate * 100).toFixed(2),
+    Latency:   +(n.latency * 100).toFixed(1),
+  })) ?? [];
+
+  const headerActions = (
+    <>
+      <select
+        value={difficulty}
+        onChange={e => resetSimulation(e.target.value as DifficultyLevel)}
+        className="bg-surface-high border border-outline-variant/20 text-on-surface rounded-xl
+                   px-4 py-2 text-xs font-medium font-headline hover:border-primary/50 transition-all"
+      >
+        {['SIMPLE', 'MEDIUM', 'COMPLEX', 'ADVERSARIAL'].map(d => (
+          <option key={d} value={d}>{d.charAt(0) + d.slice(1).toLowerCase()}</option>
+        ))}
+      </select>
+      <PrimaryButton onClick={refreshData} loading={isRefreshing} icon="refresh">
+        Refresh
+      </PrimaryButton>
+    </>
+  );
 
   return (
-    <div>
-      {/* Header */}
-      <div className="flex items-center justify-between mb-6">
-        <div>
-          <h1 className="text-3xl font-bold text-sentinel-text">Dashboard</h1>
-          <p className="text-sentinel-muted mt-1">Real-time system monitoring</p>
-        </div>
-        <div className="flex items-center gap-3">
-          <select
-            value={difficulty}
-            onChange={(e) => handleDifficultyChange(e.target.value as DifficultyLevel)}
-            className="bg-sentinel-card border border-sentinel-border text-sentinel-text rounded-md px-3 py-2 text-sm"
-          >
-            <option value="SIMPLE">Simple</option>
-            <option value="MEDIUM">Medium</option>
-            <option value="COMPLEX">Complex</option>
-            <option value="ADVERSARIAL">Adversarial</option>
-          </select>
-          <Button onClick={refreshData} isLoading={isRefreshing} variant="secondary" size="sm">
-            Refresh
-          </Button>
-        </div>
-      </div>
-
-      {isLoadingSim ? (
-        <div className="flex items-center justify-center h-64">
-          <LoadingSpinner size="lg" />
+    <Layout title="Dashboard" subtitle="Real-time system monitoring" actions={headerActions}>
+      {isLoading ? (
+        <div className="flex items-center justify-center h-96">
+          <Spinner size="lg" />
         </div>
       ) : (
-        <>
-          {/* Stats Grid */}
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
-            <StatBox
+        <div className="space-y-8 animate-fade-in">
+
+          {/* ── Stats Row ───────────────────────────────────────────────── */}
+          <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
+            <MetricCard
               label="System Health"
-              value={(systemHealth * 100).toFixed(1) + '%'}
-              color={systemHealth > 0.8 ? 'green' : systemHealth > 0.5 ? 'yellow' : 'red'}
-              trend={systemHealth > 0.8 ? 'up' : systemHealth < 0.5 ? 'down' : 'stable'}
-              trendValue={`${(systemHealth * 100).toFixed(0)}%`}
+              value={`${(systemHealth * 100).toFixed(2)}%`}
+              accent="primary"
+              pulse
+              sub="Above SLA (+0.02%)"
+              subIcon="trending_up"
             />
-            <StatBox
+            <MetricCard
               label="Active Services"
-              value={topology?.nodes.length || 0}
-              color="blue"
+              value={topology?.nodes.length ?? 0}
+              accent="secondary"
+              icon="dns"
+              sub={`${activeFailures.length} failures active`}
             />
-            <StatBox
+            <MetricCard
               label="Active Failures"
-              value={activeFailures.length}
-              color={activeFailures.length > 0 ? 'red' : 'green'}
+              value={String(activeFailures.length).padStart(2, '0')}
+              accent={activeFailures.length > 0 ? 'error' : 'primary'}
+              icon="report_problem"
+              sub={activeFailures.length > 0 ? 'High priority alerts' : 'All systems nominal'}
+              subIcon={activeFailures.length > 0 ? 'warning' : 'check_circle'}
             />
-            <StatBox
+            <MetricCard
               label="Healing Cycles"
-              value={status?.totalCycles || 0}
-              color="green"
-              trend={status ? 'up' : 'stable'}
-              trendValue={`${(status?.successRate * 100).toFixed(0)}% success`}
+              value={status?.totalCycles ?? 0}
+              accent="tertiary"
+              icon="bolt"
+              sub={`${((status?.successRate ?? 0) * 100).toFixed(1)}% success rate`}
+              subIcon="check_circle"
             />
           </div>
 
-          {/* Charts Row */}
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-6">
+          {/* ── Charts Row ──────────────────────────────────────────────── */}
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
             {/* Health Trend */}
-            <Card title="System Health Trend" subtitle="Last 20 measurements">
-              <div className="h-64">
+            <SectionCard
+              title="System Health Trend"
+              headerRight={
+                <div className="flex items-center gap-2 text-[10px] font-bold text-on-surface-variant">
+                  <span className="w-2 h-2 rounded-full bg-primary" />
+                  Live Telemetry
+                </div>
+              }
+            >
+              <div className="h-60 mt-4">
                 <ResponsiveContainer width="100%" height="100%">
                   <LineChart data={healthHistory}>
-                    <CartesianGrid strokeDasharray="3 3" stroke="#1f2937" />
-                    <XAxis dataKey="time" stroke="#9ca3af" fontSize={12} />
-                    <YAxis stroke="#9ca3af" fontSize={12} domain={[0, 1]} tickFormatter={(v) => `${(v * 100).toFixed(0)}%`} />
+                    <defs>
+                      <linearGradient id="healthGrad" x1="0" y1="0" x2="0" y2="1">
+                        <stop offset="0%"   stopColor="#3adfab" stopOpacity={0.3} />
+                        <stop offset="100%" stopColor="#3adfab" stopOpacity={0}   />
+                      </linearGradient>
+                    </defs>
+                    <CartesianGrid strokeDasharray="4 4" stroke="rgba(66,71,84,0.2)" />
+                    <XAxis dataKey="time" stroke="#424754" fontSize={10} tick={{ fill: '#8c909f' }} />
+                    <YAxis
+                      stroke="#424754" fontSize={10} tick={{ fill: '#8c909f' }}
+                      domain={[0, 1]} tickFormatter={v => `${(v * 100).toFixed(0)}%`}
+                    />
                     <Tooltip
-                      contentStyle={{
-                        backgroundColor: '#111827',
-                        border: '1px solid #1f2937',
-                        borderRadius: '8px',
-                      }}
-                      formatter={(value: number) => [(value * 100).toFixed(1) + '%', 'Health']}
+                      contentStyle={TOOLTIP_STYLE}
+                      formatter={(v: number) => [`${(v * 100).toFixed(1)}%`, 'Health']}
                     />
                     <Line
-                      type="monotone"
-                      dataKey="health"
-                      stroke={systemHealth > 0.8 ? '#10b981' : systemHealth > 0.5 ? '#f59e0b' : '#ef4444'}
-                      strokeWidth={2}
-                      dot={false}
+                      type="monotone" dataKey="health"
+                      stroke={systemHealth > 0.8 ? '#3adfab' : systemHealth > 0.5 ? '#ffb95f' : '#ffb4ab'}
+                      strokeWidth={2.5} dot={false}
+                      style={{ filter: 'drop-shadow(0 0 4px #3adfab)' }}
                     />
                   </LineChart>
                 </ResponsiveContainer>
               </div>
-            </Card>
+            </SectionCard>
 
             {/* Service Metrics */}
-            <Card title="Service Metrics" subtitle="Current resource utilization">
-              <div className="h-64">
-                <ResponsiveContainer width="100%" height="100%">
-                  <BarChart
-                    data={topology?.nodes.map((n) => ({
-                      name: n.name.split('-')[0],
-                      CPU: n.cpu,
-                      Memory: n.memory,
-                      'Error Rate': n.errorRate,
-                      Latency: n.latency,
-                    }))}
-                  >
-                    <CartesianGrid strokeDasharray="3 3" stroke="#1f2937" />
-                    <XAxis dataKey="name" stroke="#9ca3af" fontSize={12} />
-                    <YAxis stroke="#9ca3af" fontSize={12} domain={[0, 1]} tickFormatter={(v) => `${(v * 100).toFixed(0)}%`} />
-                    <Tooltip
-                      contentStyle={{
-                        backgroundColor: '#111827',
-                        border: '1px solid #1f2937',
-                        borderRadius: '8px',
-                      }}
-                      formatter={(value: number) => (value * 100).toFixed(1) + '%'}
-                    />
-                    <Legend />
-                    <Bar dataKey="CPU" fill="#3b82f6" />
-                    <Bar dataKey="Memory" fill="#10b981" />
-                    <Bar dataKey="Error Rate" fill="#ef4444" />
-                    <Bar dataKey="Latency" fill="#f59e0b" />
-                  </BarChart>
-                </ResponsiveContainer>
-              </div>
-            </Card>
+            <SectionCard
+              title="Service Metrics"
+              headerRight={
+                <div className="flex items-center gap-3">
+                  {[
+                    { label: 'CPU', color: 'bg-secondary' },
+                    { label: 'MEM', color: 'bg-primary' },
+                    { label: 'ERR', color: 'bg-error' },
+                    { label: 'LAT', color: 'bg-tertiary' },
+                  ].map(({ label, color }) => (
+                    <div key={label} className="flex items-center gap-1 text-[10px] font-bold text-on-surface-variant">
+                      <span className={`w-2 h-2 rounded ${color}`} />
+                      {label}
+                    </div>
+                  ))}
+                </div>
+              }
+            >
+              {serviceMetrics.length > 0 ? (
+                <div className="h-60 mt-4">
+                  <ResponsiveContainer width="100%" height="100%">
+                    <BarChart data={serviceMetrics} barCategoryGap="30%">
+                      <CartesianGrid strokeDasharray="4 4" stroke="rgba(66,71,84,0.2)" />
+                      <XAxis dataKey="name" stroke="#424754" fontSize={10} tick={{ fill: '#8c909f' }} />
+                      <YAxis stroke="#424754" fontSize={10} tick={{ fill: '#8c909f' }} unit="%" />
+                      <Tooltip contentStyle={TOOLTIP_STYLE} formatter={(v: number) => [`${v.toFixed(1)}%`]} />
+                      <Bar dataKey="CPU"      fill="#adc6ff" radius={[3, 3, 0, 0]} />
+                      <Bar dataKey="Memory"   fill="#3adfab" radius={[3, 3, 0, 0]} />
+                      <Bar dataKey="Err Rate" fill="#ffb4ab" radius={[3, 3, 0, 0]} />
+                      <Bar dataKey="Latency"  fill="#ffb95f" radius={[3, 3, 0, 0]} />
+                    </BarChart>
+                  </ResponsiveContainer>
+                </div>
+              ) : (
+                <div className="h-60 flex items-center justify-center">
+                  <EmptyState icon="bar_chart" title="No service data" sub="Reset the simulation to load services" />
+                </div>
+              )}
+            </SectionCard>
           </div>
 
-          {/* Status and Alerts Row */}
-          <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-            {/* System Status */}
-            <Card title="System Status">
-              <div className="space-y-3">
-                <div className="flex items-center justify-between">
-                  <span className="text-sentinel-muted">Status</span>
-                  <Badge variant={healthy ? 'success' : 'danger'}>
-                    {healthy ? 'Healthy' : 'Degraded'}
-                  </Badge>
-                </div>
-                <div className="flex items-center justify-between">
-                  <span className="text-sentinel-muted">Difficulty</span>
-                  <span className="text-sentinel-text font-medium">{difficulty}</span>
-                </div>
-                <div className="flex items-center justify-between">
-                  <span className="text-sentinel-muted">Services</span>
-                  <span className="text-sentinel-text">{topology?.nodes.length || 0}</span>
-                </div>
-                <div className="flex items-center justify-between">
-                  <span className="text-sentinel-muted">SLO Score</span>
-                  <span className="text-sentinel-text">
-                    {((topology?.nodes.filter((n) => n.failureMode === 'HEALTHY').length || 0) /
-                      Math.max(topology?.nodes.length || 1, 1) * 100).toFixed(1)}%
-                  </span>
-                </div>
-              </div>
-            </Card>
+          {/* ── Bottom Row ──────────────────────────────────────────────── */}
+          <div className="grid grid-cols-1 xl:grid-cols-3 gap-6">
+            {/* System Status table */}
+            <SectionCard
+              title="System Status"
+              noPad
+              headerRight={
+                <span className="material-symbols-outlined text-on-surface-variant cursor-pointer
+                                  hover:text-primary transition-colors">more_vert</span>
+              }
+            >
+              <table className="w-full text-left">
+                <thead>
+                  <tr className="bg-surface-low">
+                    {['Service', 'SLO', 'Status'].map(h => (
+                      <th key={h} className="px-6 py-3 text-[10px] font-black uppercase
+                                             tracking-wider text-on-surface-variant
+                                             last:text-right">
+                        {h}
+                      </th>
+                    ))}
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-outline-variant/5">
+                  {(topology?.nodes ?? []).slice(0, 5).map(node => {
+                    const ok = node.failureMode === 'HEALTHY';
+                    return (
+                      <tr key={node.id} className="hover:bg-surface-high transition-colors">
+                        <td className="px-6 py-4">
+                          <p className="text-xs font-bold">{node.name}</p>
+                          <p className="text-[10px] text-on-surface-variant capitalize">
+                            {difficulty.toLowerCase()} difficulty
+                          </p>
+                        </td>
+                        <td className="px-6 py-4 text-center">
+                          <span className={`text-xs font-headline ${ok ? 'text-primary' : 'text-tertiary'}`}>
+                            {(node.healthScore * 100).toFixed(1)}%
+                          </span>
+                        </td>
+                        <td className="px-6 py-4 text-right">
+                          <StatusBadge variant={ok ? 'success' : 'warning'}>
+                            {ok ? 'Healthy' : 'Warn'}
+                          </StatusBadge>
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </SectionCard>
 
             {/* Critical Alerts */}
-            <Card title="Critical Alerts" subtitle={`${criticalAlerts.length} active`}>
+            <div className="bg-surface-container rounded-2xl border border-outline-variant/10 p-6
+                            flex flex-col items-center justify-center text-center">
               {criticalAlerts.length === 0 ? (
-                <p className="text-sentinel-muted text-sm">No critical alerts</p>
+                <>
+                  <div className="w-16 h-16 bg-surface-high rounded-full flex items-center justify-center
+                                  mb-5 border border-outline-variant/10">
+                    <span className="material-symbols-outlined text-3xl text-on-surface-variant">verified_user</span>
+                  </div>
+                  <h3 className="font-headline font-bold text-lg mb-2">No Critical Alerts</h3>
+                  <p className="text-sm text-on-surface-variant max-w-[200px]">
+                    All systems operating within defined SLO parameters.
+                  </p>
+                  <GhostButton className="mt-6">View Alert History</GhostButton>
+                </>
               ) : (
-                <div className="space-y-2 max-h-48 overflow-y-auto">
-                  {criticalAlerts.slice(0, 5).map((alert) => (
-                    <div key={alert.alertId} className="p-2 bg-sentinel-dark rounded border border-sentinel-border">
-                      <div className="flex items-center gap-2">
-                        <Badge variant={alert.severity === 'CRITICAL' ? 'danger' : 'warning'} size="sm">
-                          {alert.severity}
-                        </Badge>
-                        <span className="text-sm text-sentinel-text truncate">{alert.serviceName}</span>
+                <div className="w-full space-y-3">
+                  <div className="flex items-center justify-between mb-2">
+                    <h3 className="font-headline font-bold">Critical Alerts</h3>
+                    <StatusBadge variant="danger">{criticalAlerts.length} active</StatusBadge>
+                  </div>
+                  {criticalAlerts.slice(0, 4).map(a => (
+                    <div key={a.alertId}
+                         className="flex items-start gap-3 p-3 bg-surface-low rounded-xl border border-outline-variant/5 text-left">
+                      <StatusBadge variant="danger" size="sm">{a.severity}</StatusBadge>
+                      <div className="overflow-hidden">
+                        <p className="text-xs font-bold truncate">{a.serviceName}</p>
+                        <p className="text-[10px] text-on-surface-variant">
+                          {a.anomalyType.replace(/_/g, ' ')}
+                        </p>
                       </div>
-                      <p className="text-xs text-sentinel-muted mt-1">{alert.anomalyType.replace(/_/g, ' ')}</p>
                     </div>
                   ))}
                 </div>
               )}
-            </Card>
+            </div>
 
-            {/* Recent Healing Cycles */}
-            <Card title="Recent Healing" subtitle="Last 5 cycles">
-              {recentCycles.length === 0 ? (
-                <p className="text-sentinel-muted text-sm">No healing cycles yet</p>
-              ) : (
-                <div className="space-y-2 max-h-48 overflow-y-auto">
-                  {recentCycles.slice(-5).reverse().map((cycle) => (
-                    <div key={cycle.cycleNumber} className="p-2 bg-sentinel-dark rounded border border-sentinel-border">
-                      <div className="flex items-center justify-between">
-                        <span className="text-sm text-sentinel-text">Cycle #{cycle.cycleNumber}</span>
-                        <Badge variant={cycle.successful ? 'success' : 'danger'} size="sm">
-                          {cycle.successful ? 'OK' : 'FAIL'}
-                        </Badge>
+            {/* Recent Healing */}
+            <SectionCard
+              title="Recent Healing"
+              headerRight={
+                <span className="text-[10px] font-bold text-primary uppercase">Active Cycle</span>
+              }
+              noPad
+            >
+              <div className="p-4 space-y-3">
+                {recentCycles.length === 0 ? (
+                  <EmptyState icon="history" title="No healing cycles yet" />
+                ) : (
+                  [...recentCycles].reverse().slice(0, 4).map(cycle => (
+                    <div key={cycle.cycleNumber}
+                         className="flex items-start gap-3 p-3 bg-surface-low rounded-xl
+                                    border border-outline-variant/5 hover:bg-surface-high transition-colors">
+                      <div className={`w-8 h-8 rounded-xl flex items-center justify-center shrink-0
+                                       ${cycle.successful ? 'bg-primary/10' : 'bg-error/10'}`}>
+                        <span className={`material-symbols-outlined text-lg
+                                          ${cycle.successful ? 'text-primary' : 'text-error'}`}>
+                          {cycle.successful ? 'autorenew' : 'error_outline'}
+                        </span>
                       </div>
-                      <p className="text-xs text-sentinel-muted mt-1">{cycle.outcome}</p>
+                      <div className="flex-1 overflow-hidden">
+                        <div className="flex justify-between">
+                          <p className="text-xs font-bold truncate">Cycle #{cycle.cycleNumber}</p>
+                          <StatusBadge variant={cycle.successful ? 'success' : 'danger'} size="sm">
+                            {cycle.successful ? 'OK' : 'FAIL'}
+                          </StatusBadge>
+                        </div>
+                        <p className="text-[10px] text-on-surface-variant truncate mt-0.5">
+                          {cycle.outcome}
+                        </p>
+                      </div>
                     </div>
-                  ))}
-                </div>
-              )}
-            </Card>
+                  ))
+                )}
+              </div>
+            </SectionCard>
           </div>
-        </>
+
+        </div>
       )}
-    </div>
+    </Layout>
   );
 }

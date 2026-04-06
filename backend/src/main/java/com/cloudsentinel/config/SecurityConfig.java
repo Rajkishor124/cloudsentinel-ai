@@ -30,6 +30,8 @@ public class SecurityConfig {
                 .requestMatchers(
                     "/api/v1/simulation/**",
                     "/api/v1/metadata",
+                    "/api/v1/healing/**",
+                    "/api/v1/topology/**",
                     "/h2-console/**",
                     "/actuator/**"
                 ).permitAll()

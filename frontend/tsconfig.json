@@ -23,6 +23,18 @@
         "paths": {
             "@/*": [
                 "src/*"
+            ],
+            "@stores/*": [
+                "src/stores/*"
+            ],
+            "@components/*": [
+                "src/components/*"
+            ],
+            "@lib/*": [
+                "src/lib/*"
+            ],
+            "@types/*": [
+                "src/types/*"
             ]
         }
     },
