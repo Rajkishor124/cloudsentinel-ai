@@ -3,11 +3,15 @@ package com.cloudsentinel.detector.model;
 import java.time.Instant;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.concurrent.atomic.AtomicLong;
 
 /**
  * Represents a detected anomaly with metadata.
  */
 public class AnomalyAlert {
+
+    private static final AtomicLong ID_COUNTER = new AtomicLong(0);
+
     private String alertId;
     private Instant timestamp;
     private String serviceId;
@@ -85,7 +89,7 @@ public class AnomalyAlert {
     public void setResolvedAt(Instant resolvedAt) { this.resolvedAt = resolvedAt; }
 
     private String generateAlertId() {
-        return "ALERT-" + System.currentTimeMillis() + "-" + (int)(Math.random() * 1000);
+        return "ALERT-" + System.currentTimeMillis() + "-" + ID_COUNTER.incrementAndGet();
     }
 
     @Override
